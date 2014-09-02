@@ -1,0 +1,1551 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+	<META HTTP-EQUIV="CONTENT-TYPE" CONTENT="text/html; charset=windows-1251">
+	<TITLE>The Boost FSM Library</TITLE>
+	<META NAME="CREATED" CONTENT="20061203;16314615">
+	<META NAME="CHANGEDBY" CONTENT="Andrey Semashev">
+	<META NAME="CHANGED" CONTENT="20061210;3203271">
+	<STYLE>
+		pre{
+			BORDER-RIGHT: gray 1pt solid;
+			PADDING-RIGHT: 2pt;
+			BORDER-TOP: gray 1pt solid;
+			DISPLAY: block;
+			PADDING-LEFT: 2pt;
+			PADDING-BOTTOM: 2pt;
+			BORDER-LEFT: gray 1pt solid;
+			MARGIN-RIGHT: 32pt;
+			PADDING-TOP: 2pt;
+			BORDER-BOTTOM: gray 1pt solid;
+			FONT-FAMILY: "Courier New", Courier, mono;
+			background-color: #EEEEEE;
+		}
+		.keyword{color: #0000FF;}
+		.comment{font-style: italic; color: #008000;}
+	</STYLE>
+</HEAD>
+<BODY LANG="ru-RU" TEXT="#000000" BGCOLOR="#ffffff" DIR="LTR" link="#0000FF" vlink="#840084" alink="#0000FF">
+<P><IMG SRC="../../../boost.png" NAME="Boost logo" ALT="C++ Boost" ALIGN=BOTTOM WIDTH=277 HEIGHT=86 BORDER=0>
+</P>
+<H1>The Boost FSM Library</H1>
+<P>The Boost.FSM library is an implementation of FSM (stands for
+Finite State Machine) programming concept.</P>
+<P>There are many cases when a developer would like to distinguish
+behaviour of a given object depending on some conditions or its
+internal state. For example, while developing software to control an
+charging turnstile a programmer would like to separate
+states in which the turnstile may persist: an idle state, when the
+device awaits for another passenger that would like to pass; a
+processing state, when the passenger have come and put his ticket
+into the device; and the passing state, when the turnstile lets the
+passenger pass through. In fact, each state describes a different
+reaction of the machine at the same events. That's why a passenger may only pass
+after paying for ticket. Obviously, the turnstile have to be able
+to change its internal state in order to function properly, this is
+called state switching or transitions between states (or just
+transitions for short).</P>
+<P>This implementation is aimed to ease the creation of such state
+machines in C++. It supports constructing passive automatons (which
+means that every action the machine performs is a response to some
+external event) with finite number of states and finite number of
+transitions (that is why they are called finite state machines). The
+main goals of the library are:</P>
+<UL>
+	<LI>Simplicity. It should be very simple to create state machines
+	using this library.</LI>
+	<LI>Performance. The state machine infrastructure should not be
+	very time and memory-consuming in order to be applicable in more use
+	cases.</LI>
+	<LI>Extensibility. A developer may want to add more states to the
+	existing state machine, for example, the maintenance state for the
+	turnstile mentioned above, and this addition should be relatively safe since
+	it souldn't interfere with the existing states. The developer should
+	also be able to specify additional transitions and events for the
+	machine with minimum modifications to the existing code.</LI>
+</UL>
+<H1>Boost.FSM vs. Boost.Statechart</H1>
+<P>There is another library in Boost that provides similar functionality:
+<a href="../../statechart/index.html">Boost.Statechart</a>. Although it
+currently covers almost all major Boost.FSM features and provides ones
+that are not supported in this library, Boost.Statechart is more targeted
+to creation of big and complex state machines with possibility of distributed
+development. But this does not come at no price and Statechart has little
+tools for compile-time programming and does not provide as much run-tume
+performance as Boost.FSM does. So there are main guidelines for users to
+make a decision between Boost.FSM and Boost.Statechart:</P>
+<P>
+Users should consider Boost.FSM if
+<UL>
+	<li>a state machine to develop is not complex enough to need states hierarchy (i.e.
+	states that are inner to other states) or nested states can be replaced with
+	separate state machines</li>
+	<li>the state machine doesn't need to be executed in a dedicated thread (i.e. does not need to be asynchronous)</li>
+	<li>the state machine has to return a value</li>
+	<li>the state machine would benefit from template event handlers</li>
+	<li>run-time performance is of high priority</li>
+</UL>
+Users should be leaning towards Boost.Statechart if
+<UL>
+	<li>the state machine makes use of states hierarchy and orthogonal states</li>
+	<li>the development of the state machine is to be distributed between several
+	teams with minimum code intersection between them</li>
+	<li>the state machine will run in its own dedicated thread</li>
+	<li>the state machine would like to send events to itself</li>
+	<li>UML support is needed</li>
+</UL>
+</P>
+<H1>Boost.FSM vs. &quot;C++ Template Metaprogramming&quot; approach</H1>
+<P>The ones who have read the <a href="http://www.boostpro.com/mplbook/">C++ Template Metaprogramming</a>
+book may wonder what are the differences between the Boost.FSM library and that book. The approach is
+illustrated in two examples: <a href="http://www.boostpro.com/mplbook/examples/player.cpp">Player</a>
+and <a href="http://www.boostpro.com/mplbook/examples/player2.cpp">Player2</a>, both of which model a music player.</P>
+<P>Actually, despite the fact that Boost.FSM evolved independently, the core idea of the library is quite similar
+to the Player2 example: the library automatically generates table of function pointers to dispatch events between states.
+Unlike the sequential event handler lookup, presented in the first Player code sample, this approach provides optimal
+performance in case of middle-sized and large state machines. However, there are additional significant benefits provided
+by the library:
+<UL>
+    <li>The library does not take addresses of event handlers, which simplifies usage of template handlers and overloads.
+    This feature may be very useful if several types of events should be processed in a similar manner. It also simplifies
+    event layering, when all events are divided into several categories, which are represented as template wrapper classes.
+    <li>The states are represented as classes rather than enumeration values. This allows to have state-specific data,
+    enter/leave handlers and to extract common routines and data to base classes.
+    <li>The library supports switching the current state from event handler, in addition to the transition map. Transitions,
+    in their turn, can include functions to check run-time conditions for the transition to take place. The target state
+    can be determined in run time.
+    <li>The library provides a way to check the completeness of the state machine at compile time. The state machine that aims
+    to be complete will not compile if there is possibility to receive an unexpected event.
+</UL>
+Aside from that, the library provides other minor benefits, like automatic generation of state names, support for returning FSMs, ability to
+reset the machine to its initial state and multithreading support. Nonetheless, the Player approach has it own advantages:
+<UL>
+    <li>The initial state can be specified in run time. The Boost.FSM implicitly uses the first state in the state list as initial.
+    <li>Theoretically, a clever compiler may generate faster code in case of small state machines. All event handlers and
+    transitions are known at compile time, which allows the compiler to inline more aggressively.
+    <li>Compile times and resulting binary sizes of FSMs with Player approach are expected to be less than with Boost.FSM.
+</UL>
+</P>
+<P><BR><BR>
+</P>
+<H2>Table of Contents</H2>
+<P>
+<OL>
+	<LI><A HREF="#Using the library">Using the library</A></LI>
+	<LI><A HREF="#Tutorial">Tutorial</A>
+		<OL>
+			<LI><A HREF="#Step 1. Declaring states">Step 1. Declaring states</A></LI>
+			<LI><A HREF="#Step 2. Defining events">Step 2. Defining events</A></LI>
+			<LI><A HREF="#Step 3. Defining states">Step 3. Defining states</A></LI>
+			<LI><A HREF="#Step 4. Constructing and using state machine">Step 4. Constructing and using state machine</A></LI>
+		</OL>
+	</LI>
+	<LI><A HREF="#Advanced features">Advanced features</A>
+		<OL>
+			<LI><A HREF="#Common data and methods among states">Common data and methods among states</A></LI>
+			<LI><A HREF="#State identifiers and dynamic switch_to mechanism">State identifiers and dynamic <CODE>switch_to</CODE> mechanism</A></LI>
+			<LI><A HREF="#Enter and leave state handlers">Enter and leave state handlers</A></LI>
+			<LI><A HREF="#Resetting state machine">Resetting state machine</A></LI>
+			<LI><A HREF="#Returning a value from state machine's process">Returning a value from state machine's <CODE>process</CODE></A></LI>
+			<LI><A HREF="#Unexpected events handling">Unexpected events handling</A></LI>
+			<LI><A HREF="#Specifying transition map">Specifying transition map</A></LI>
+			<LI><A HREF="#Customizing transition rules in transition map">Customizing transition rules in transition map</A></LI>
+			<LI><A HREF="#Specifying state names">Specifying state names</A></LI>
+			<LI><A HREF="#Accessing the states, state type information and checking if the machine is in a specified state">Accessing the states, state type information and checking if the machine is in a specified state</A></LI>
+			<LI><A HREF="#Simplified event construction">Simplified event construction</A></LI>
+			<LI><A HREF="#Compile-time state machine consistency check">Compile-time state machine consistency check</A></LI>
+		</OL>
+	</LI>
+	<LI><A HREF="reference.html#Concepts">Concepts</A>
+		<OL>
+			<LI><A HREF="reference.html#States">States</A></LI>
+			<LI><A HREF="reference.html#Events">Events</A></LI>
+			<LI><A HREF="reference.html#Event handlers">Event handlers</A></LI>
+			<LI><A HREF="reference.html#Transitions">Transitions</A></LI>
+			<LI><A HREF="reference.html#Enter and leave state handlers, reset handler">Enter and leave state handlers, reset handler</A></LI>
+			<LI><A HREF="reference.html#Unexpected event handlers">Unexpected event handlers</A></LI>
+			<LI><A HREF="reference.html#State name accessors">State name accessors</A></LI>
+			<LI><A HREF="reference.html#State machine return types">State machine return types</A></LI>
+		</OL>
+	</LI>
+	<LI><A HREF="reference.html#Reference">Reference</A>
+		<OL>
+			<LI><A HREF="reference.html#Type state_id_t">Type <CODE>state_id_t</CODE></A></LI>
+			<LI><A HREF="reference.html#Class template state">Class template <CODE>state</CODE></A></LI>
+			<LI><A HREF="reference.html#Class template state_machine">Class template <CODE>state_machine</CODE></A></LI>
+			<LI><A HREF="reference.html#Class template locking_state_machine">Class template <CODE>locking_state_machine</CODE></A></LI>
+			<LI><A HREF="reference.html#Class template basic_transition">Class template <CODE>basic_transition</CODE></A></LI>
+			<LI><A HREF="reference.html#Class template transition">Class template <CODE>transition</CODE></A></LI>
+			<LI><A HREF="reference.html#Class templates event and event_c">Class templates <CODE>event</CODE> and <CODE>event_c</CODE></A></LI>
+			<LI><A HREF="reference.html#Class fsm_error">Class <CODE>fsm_error</CODE></A></LI>
+			<LI><A HREF="reference.html#Class bad_state_id">Class <CODE>bad_state_id</CODE></A></LI>
+			<LI><A HREF="reference.html#Class unexpected_event">Class <CODE>unexpected_event</CODE></A></LI>
+		</OL>
+	</LI>
+	<LI><A HREF="#Multithreading support">Multithreading support</A></LI>
+	<LI><A HREF="#Performance">Performance</A></LI>
+	<LI><A HREF="#Dependency">Dependency</A></LI>
+	<LI><A HREF="#Portability">Portability</A></LI>
+</OL>
+</P>
+<P><BR><BR>
+</P>
+<H2><A NAME="Using the library">Using the library</A></H2>
+<P>The library is header-only which means you don't have to compile anything to
+begin using it. All headers of the library reside in the <CODE>fsm</CODE>
+subdirectory of Boost include root. Any header in this directory may be included
+by users:
+<UL>
+	<li><code>state_machine.hpp</code>. This is the main header of the library
+	that defines classes <code>state</code> and <code>state_machine</code>.</li>
+	<li><code>exceptions.hpp</code>. Exception classes are defined in this file.
+	It is automatically included by <code>state_machine.hpp</code>.</li>
+	<li><code>transition.hpp</code>. This header defines basic classes for
+	defining automatic transition maps, such as <code>basic_transition</code>
+	and <code>transition</code>.</li>
+	<li><code>event.hpp</code>. Simplified events support is implemented in this
+	header. Classes <code>event</code> and <code>event_c</code> with their
+	maker functions reside here.</li>
+	<li><code>locking_state_machine.hpp</code>. Thread-protected state machine
+	class <code>locking_state_machine</code> is implemented in this file.</li>
+</UL>
+There is also <code>detail</code> subdirectory in the library folder. Implementation
+details lurk in this subfolder, so users should not try to include any files from it.
+</P>
+<P>
+The user should use definitions from namespace <CODE>::boost::fsm</CODE>.
+The internals of the library reside in namespace <CODE>::boost::fsm::aux</CODE>,
+users should not use any names from it. Further, if not explicitly noted,
+in all code examples we shall imply that all boost names are imported
+into the global namespace with the <CODE>using
+namespace boost</CODE> directive.</P>
+<P><BR>
+</P>
+<H2><A NAME="Tutorial">Tutorial</A></H2>
+<P>In this section we shall describe how to create state machines.
+The tutorial is a step-by-step instruction based on the example of
+turnstile in the introduction above. It gives basic knowledge of
+using the library.</P>
+<P>The final version of the tutorial code may be found in the
+library examples, in the <code>libs/fsm/examples/Turnstile</code> folder.
+Users may also consider library tests as examples of library usage.</P>
+<H3><A NAME="Step 1. Declaring states">Step 1. Declaring states</A></H3>
+<P>Before getting started with code writing it is a good idea to
+think over the behaviour we want to implement in our automaton. We
+have to define which states it will consist of and what behaviour it
+will implement in each state. Each state should be stable in that the
+machine should be able to stay in the state between processing at
+least two events. Each state should have its own well-defined
+semantics and not interfere with other states in this semantics. Of
+course, there should be more than one state. These guidelines will help us
+further when we implement states and transitions between them.</P>
+<P>In case of our charging turnstile we have already done such
+analysis in introduction, and now we can simply declare states.</P>
+<blockquote><PRE><span class=comment>// Idle state. In this state the machine is waiting for a new request.</span>
+<span class=keyword>struct</span> Idle;
+<span class=comment>// Processing state. Fee for passing through the turnstile is being taken.</span>
+<span class=keyword>struct</span> Processing;
+<span class=comment>// Passing state. The passenger is allowed to pass through the turnstile.</span>
+<span class=keyword>struct</span> Passing;</PRE></blockquote><P>
+And to pass these states to the library components we shall declare a
+type sequence of them.</P>
+<blockquote><PRE STYLE="margin-bottom: 0.5cm"><span class=keyword>typedef</span> mpl::vector&lt; Idle, Processing, Passing &gt;::type StateList;</PRE></blockquote><P>
+Note that we use inner type <CODE>type</CODE>,
+not the <CODE>vector</CODE> template
+itself, to shorten type list sequence name. In fact, we could use any
+mpl sequence here instead of <CODE>vector</CODE>,
+for example, <CODE>list</CODE> would work too.</P>
+<P>The order in which the states
+are noted in the type sequence is not significant except that the
+first state in the sequence will be the default, i.e. the state
+machine will be in this state right after construction and reset.</P>
+<H3><A NAME="Step 2. Defining events">Step 2. Defining events</A></H3>
+<P>While thinking of states
+we should also think of events that will be handled by our state
+machine. The events are generated by environment and are represented
+as objects of different types. Later on we shall define reactions to
+these events in each state.</P>
+<P>Currently, the implementation
+permits events of any type except <CODE>void</CODE>,
+but users are discouraged to use pure fundamental types for the events
+because they lack representativeness and extensibility. Constness and
+referenceness of the event type is not significant as all events are
+passed by const reference to the state machine.</P>
+<blockquote><PRE><span class=comment>// The event of a passenger trying to pass through the turnstile</span>
+<span class=keyword>struct</span> PassengerPassing {};
+<span class=comment>// The event of a passenger have passed the turnstile</span>
+<span class=keyword>struct</span> PassengerPassed {};
+<span class=comment>// The event of putting a ticket into the turnstile</span>
+<span class=keyword>struct</span> Ticket
+{
+  <span class=comment>// An event may contain data.
+  // Ticket identification number</span>
+  std::string ID;
+
+  <span class=comment>// Constructor</span>
+  Ticket(std::string <span class=keyword>const</span>&amp; id) : ID(id) {}
+};
+<span class=comment>// The event of ticket validity check result</span>
+<span class=keyword>struct</span> ValidityCheckResult
+{
+  <span class=comment>// The flag shows if a ticket is valid</span>
+  <span class=keyword>bool</span> Valid;
+
+  <span class=comment>// Constructor</span>
+  ValidityCheckResult(<span class=keyword>bool</span> valid) : Valid(valid) {}
+};</PRE></blockquote><P>
+Actually, there is a way to avoid defining these event classes,
+though you will still have to define tags of events. This feature is
+described in the <A HREF="#Simplified event construction">
+Advanced features section</A>.</P>
+<H3><A NAME="Step 3. Defining states">Step 3. Defining states</A></H3>
+<P>Now the time has come to implement states we have declared above.
+All states have to publicly inherit a library class template
+<CODE>fsm::state</CODE> that
+implements basic operations and properties of states. Then we will
+have to declare <CODE>on_process</CODE>
+methods of states that will process the events we described above.
+These <CODE>on_process</CODE> methods
+should take one argument (the event) and may be overloaded or
+even be templates. Which one of them is called on event receipt is
+defined by C++ overload resolution rules. The only constraint is that,
+having a given event type <CODE>E</CODE> and a number of overloaded
+<CODE>on_process</CODE> methods taking arguments of <CODE>E1</CODE>-<CODE>E<i>n</i></CODE>,
+a user-defined conversion or ellipsis conversion of <CODE>E</CODE>
+to <CODE>E<i>i</i></CODE> is not allowed. Implicit standard conversions
+are welcome, though. Let's see the example.</P>
+<blockquote><PRE><span class=comment>// Idle state definition</span>
+<span class=keyword>struct</span> Idle :
+  <span class=keyword>public</span> fsm::state&lt; Idle, StateList &gt;
+{
+  <span class=comment>// In Idle state we are waiting for a ticket to process</span>
+  <span class=keyword>void</span> on_process(Ticket <span class=keyword>const</span>&amp; ticket)
+  {
+    std::cout &lt;&lt; &quot;Ticket with ID: &quot; &lt;&lt; ticket.ID &lt;&lt; &quot;. Please wait...&quot; &lt;&lt; std::endl;
+    <span class=comment>// Let's assume this function initiates the ticket validity check
+    // This may be an asynchronous operation (database query, for example), so we will have
+    // to wait for a response</span>
+    CheckTicketValidity(ticket.ID);
+    switch_to&lt; Processing &gt;();
+  }
+
+  <span class=comment>// In case if a passenger tries to pass without a ticket we should alarm</span>
+  <span class=keyword>void</span> on_process(PassengerPassing <span class=keyword>const</span>&amp;)
+  {
+    std::cout &lt;&lt; &quot;You may not pass. Please, put your ticket into the turnstile first.&quot; &lt;&lt; std::endl;
+    <span class=comment>// This function raises alarm</span>
+    RaiseUnauthorizedPassAlarm();
+  }
+};
+
+<span class=comment>// Processing state definition</span>
+<span class=keyword>struct</span> Processing :
+  <span class=keyword>public</span> fsm::state&lt; Processing, StateList &gt;
+{
+  <span class=comment>// In this state we are waiting for ticket validity check is being processed</span>
+  <span class=keyword>void</span> on_process(ValidityCheckResult <span class=keyword>const</span>&amp; result)
+  {
+    <span class=keyword>if</span> (result.Valid)
+    {
+      <span class=comment>// The passenger may pass</span>
+      std::cout &lt;&lt; &quot;You may pass&quot; &lt;&lt; std::endl;
+      <span class=comment>// Let's assume this function unlocks the turnstile</span>
+      UnlockTheTurnstile();
+      <span class=comment>// And after that the turnstile should be waiting for the passenger to pass</span>
+      switch_to&lt; Passing &gt;();
+    }
+    <span class=keyword>else</span>
+    {
+      <span class=comment>// The ticket is not valid</span>
+      std::cout &lt;&lt; &quot;Your ticket is not valid. Please, obtain another one.&quot; &lt;&lt; std::endl;
+      switch_to&lt; Idle &gt;();
+    }
+  }
+
+  <span class=comment>// The on_process method may be a template
+  // This method will be called in case if some another event arrives</span>
+  <span class=keyword>template</span>&lt; <span class=keyword>typename</span> T &gt;
+  <span class=keyword>void</span> on_process(T <span class=keyword>const</span>&amp;)
+  {
+    std::cout &lt;&lt; &quot;Please wait, the ticket validity check is in process...&quot; &lt;&lt; std::endl;
+  }
+};
+
+<span class=comment>// Passing state definition</span>
+<span class=keyword>struct</span> Passing :
+  <span class=keyword>public</span> fsm::state&lt; Passing, StateList &gt;
+{
+  <span class=comment>// A state may contain data</span>
+  <span class=keyword>bool</span> m_fPassengerPassing;
+
+  Passing() : m_fPassengerPassing(<span class=keyword>false</span>) {}
+
+  <span class=comment>// In this state we should allow a passenger to pass</span>
+  <span class=keyword>void</span> on_process(PassengerPassing <span class=keyword>const</span>&amp;)
+  {
+    <span class=comment>// Since we may allow to pass only one passenger, we shall use this flag
+    // to detect if a second person tries to pass for free</span>
+    <span class=keyword>if</span> (!m_fPassengerPassing)
+    {
+      <span class=comment>// It's ok, the first passenger passes</span>
+      m_fPassengerPassing = <span class=keyword>true</span>;
+    }
+    <span class=keyword>else</span>
+    {
+      <span class=comment>// Someone tries to pass for free</span>
+      std::cout &lt;&lt; &quot;Please wait until the first passenger passes&quot; &lt;&lt; std::endl;
+      RaiseUnauthorizedPassAlarm();
+    }
+  }
+
+  <span class=comment>// When the passenger have passed we should lock the turnstile again</span>
+  <span class=keyword>void</span> on_process(PassengerPassed <span class=keyword>const</span>&amp;)
+  {
+    m_fPassengerPassing = <span class=keyword>false</span>;
+    LockTheTurnstile();
+    <span class=comment>// And loop back to Idle state</span>
+    switch_to&lt; Idle &gt;();
+  }
+};</PRE></blockquote><P>
+As you may see, to instantiate the <CODE>fsm::state</CODE> template we use
+two template type arguments: the state type and the type sequence of states.
+In order this instantiation to compile the state must be in the type
+sequence and the type sequence must be the same for all states of the automaton.
+In fact, <CODE>fsm::state</CODE> has three
+template arguments, the third one is the return type of the whole FSM and
+by default is <CODE>void</CODE>. This
+feature is described in the <A HREF="#Returning a value from state machine's process">
+Advanced features section</A>.</P>
+<P>The <CODE>fsm::state</CODE>
+template defines a number of methods and properties that may be used
+in the state class. One of them is the <CODE>switch_to</CODE>
+template method you might have noticed in the example above. This method changes the
+current state of the state machine, so the following events to be
+delivered in the next state. It does not terminate the <CODE>on_process</CODE>
+method so the code after the call to <CODE>switch_to</CODE>
+will be executed. The template argument of <CODE>switch_to</CODE>
+must be a state in the type list that have been passed in <CODE>fsm::state</CODE>
+template arguments, otherwise the call will not compile. It is
+possible to call <CODE>switch_to</CODE>
+to perform transition to current state. In this case the call will be
+empty and will not perform any actions. Other methods and properties
+of the <CODE>fsm::state</CODE> template
+are described in the <A HREF="#Advanced features">Advanced features</A>
+and Reference sections.</P>
+<P>You can not create objects of
+state classes. This is done so to prevent users from misuse states as
+separate objects, not within the complete state machine. The
+<CODE>switch_to</CODE> mechanism would
+become unsafe in these conditions. This leads us to the next step of our tutorial.</P>
+<H3><A NAME="Step 4. Constructing and using state machine">
+Step 4. Constructing and using state machine</A></H3>
+<P>To construct the complete
+state machine we have to instantiate <CODE>fsm::state_machine</CODE>
+class template with the <CODE>StateList</CODE> type sequence we declared above.</P>
+<blockquote><PRE><span class=keyword>typedef</span> fsm::state_machine&lt; StateList &gt; TurnstileStateMachine;
+TurnstileStateMachine turnstile;</PRE></blockquote><P>
+The <CODE>fsm::state_machine</CODE>
+template defines interface that
+can be used to interact with the automaton. To pass some event to the
+FSM we have to call its method <CODE>process</CODE>.
+It will detect the current state and redirect the call to the
+appropriate <CODE>on_process</CODE>
+method of the active state. From developer's point of view this call will be pretty much
+equivalent to a direct call to <CODE>on_process</CODE>
+method. For example, to emulate correct turnstile passing procedure
+we could write the following event processing sequence:</P>
+<blockquote><PRE><span class=comment>// A passenger comes to turnstile and puts his ticket into it.</span>
+turnstile.process(Ticket(&quot;1234567&quot;));
+<span class=comment>// The device sends a request to validate the ticket and displays a message asking to wait a while
+// Now the validation response arrives, let's say it's positive</span>
+turnstile.process(ValidityCheckResult(<span class=keyword>true</span>));
+<span class=comment>// The turnstile is unlocked now, the passenger passes</span>
+turnstile.process(PassengerPassing());
+<span class=comment>// And when he have passed the device gets locked again</span>
+turnstile.process(PassengerPassed());</PRE></blockquote><P>
+Of course, the event sequence may
+differ. In that case the reaction of the state machine will be
+appropriate.</P>
+<blockquote><b>Note:</b> The state machine always works in synchronous mode and never
+changes the order of events being processed. If such functionality is needed, it should
+be done externally. For example, one could create a <CODE>boost::function</CODE> delegate
+with bound pointer to the <CODE>process</CODE> method, pointer to the FSM instance and an event
+in order to deliver the event later by calling the functor. The logic of scheduling events
+is out of the library scope and deserves to be implemented in a separate library.</blockquote>
+<P>That's it, you now have the basic knowledge of constructing simple state machines
+with the Boost.FSM library. But there are a lot of features and usage hints that were
+left out of this brief tutorial scope and are described in the following sections.</P>
+<P><BR>
+</P>
+<H2><A NAME="Advanced features">Advanced features</A></H2>
+<P>In this section we shall discover advanced features of the library
+and usage hints that may be helpful in the real life.</P>
+<H3><A NAME="Common data and methods among states">Common
+data and methods among states</A></H3>
+<P>A state machine may have
+common data and methods being shared between states. These common pieces
+should be placed into a separate class which would be a <I>virtual</I>
+base class for all (or some) states. The library is designed to
+create a cumulative object that inherits all states in the state type
+sequence when the complete state machine is constructed. That being
+said, the vitual base class will have only one instance shared
+between states. And no additional effort have to be taken to access
+this instance (e.g. no additional pointer or reference but <CODE>this</CODE>).</P>
+<P>This approach has some
+limitations. In the virtual base class the additional state machine
+services, such as the <CODE>switch_to</CODE>
+method, will be inaccessible. There are two solutions for this
+problem. The first is to create a class template that will be a public
+base of all (or some) states. This class should inherit <CODE>fsm::state</CODE>
+class and (if there is one) virtual base class with other commons. This
+class template should contain all data and methods that should be
+available in each state. It can even contain common <CODE>on_process</CODE>
+handlers (but don't forget to import them into a state class via
+using declaration). For example:</P>
+<blockquote><PRE><span class=comment>// This class contains common data and methods shared between states</span>
+<span class=keyword>struct</span> Common
+{
+  std::string m_SharedData;
+
+  <span class=keyword>void</span> DoSomethingRegardlessOfState();
+};
+
+<span class=comment>// This class template contains data of each state (not shared) and methods that make use of FSM facilities</span>
+<span class=keyword>template</span>&lt; <span class=keyword>typename</span> StateT &gt;
+<span class=keyword>struct</span> StateBase :
+  <span class=keyword>public</span> fsm::state&lt; StateT, StateList &gt;,
+  <span class=keyword>virtual public</span> Common
+{
+  <span class=keyword>int</span> m_EachStateHasThis;
+
+  <span class=comment>// This event handler will be available in all states</span>
+  <span class=keyword>void</span> on_process(SomeCommonEvent)
+  {
+    <span class=comment>// Don't forget that switch_to should depend on template parameter</span>
+    <span class=keyword>this</span>-&gt;<span class=keyword>template</span> switch_to&lt; State3 &gt;();
+  }
+};
+
+<span class=comment>// State1</span>
+<span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> StateBase&lt; State1 &gt;
+{
+  <span class=comment>// We have to import on_process method from the base class</span>
+  <span class=keyword>using</span> StateBase&lt; State1 &gt;::on_process;
+
+  <span class=comment>// Here we can define some state-specific things</span>
+  <span class=keyword>void</span> on_process(Event1);
+};
+
+<span class=comment>// State2</span>
+<span class=keyword>struct</span> State2 :
+  <span class=keyword>public</span> StateBase&lt; State2 &gt;
+{
+  <span class=comment>// We have to import on_process method from the base class</span>
+  <span class=keyword>using</span> StateBase&lt; State2 &gt;::on_process;
+
+  <span class=comment>// Here we can define some state-specific things</span>
+  <span class=keyword>void</span> on_process(Event2);
+};
+
+<span class=comment>// State3</span>
+<span class=keyword>struct</span> State3 :
+  <span class=keyword>public</span> StateBase&lt; State3 &gt;
+{
+  <span class=comment>// We have to import on_process method from the base class</span>
+  <span class=keyword>using</span> StateBase&lt; State3 &gt;::on_process;
+
+  <span class=comment>// Here we can define some state-specific things</span>
+  <span class=keyword>void</span> on_process(Event3);
+};</PRE></blockquote><P>
+The second way to address the
+problem actually focuses on passing the current state information to
+state-unaware methods using state identifiers (see below). In this
+approach all code that depends on the state machine is kept in the state
+but some state-dependant logic may be extracted to the virtual base
+class. This solution should be used with care since it potentially
+leads to a less structured state machine implementation. In most
+cases the first solution described above should be used instead of
+this one.</P>
+<H3><A NAME="State identifiers and dynamic switch_to mechanism">
+State identifiers and dynamic <CODE>switch_to</CODE> mechanism</A></H3>
+<P>Each state has a static
+integral constant <CODE>state_id</CODE>
+that can be used to identify the state. The state identifiers are of
+type <CODE>fsm::state_id_t</CODE>. It
+is guaranteed that each state in a complete state machine has its
+state identifier unique in scope of the machine. States in different machines may have same
+or different identifiers and one should not rely on any coherence
+between them. User should also not rely on the absolute values of
+these identifiers or relations between them within a single complete
+state machine. State identifiers may be used to dynamically switch
+between states or to pass information of current state to some
+external (from the library's point of view) procedures. For example:</P>
+<blockquote><PRE><span class=comment>// The class with common data and methods shared between states</span>
+<span class=keyword>struct</span> Common
+{
+  <span class=keyword>int</span> m_Data;
+
+  <span class=comment>// This method takes into account current state and determines the next state to switch to</span>
+  fsm::state_id_t DetermineNextState(fsm::state_id_t CurrentStateID, <span class=keyword>int</span> Data);
+};
+
+<span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList &gt;
+  <span class=keyword>virual public</span> Common
+{
+  fsm::state_id_t m_NextState;
+
+  <span class=keyword>void</span> on_process(<span class=keyword>int</span> Data)
+  {
+    m_NextState = DetermineNextState(state_id, Data);
+  }
+
+  <span class=keyword>void</span> on_process(SomeEvent)
+  {
+    <span class=comment>// Dynamic version of switching between states
+    // If the state identifier passed to switch_to is invalid it will throw fsm::bad_state_id</span>
+    switch_to(m_NextState);
+  }
+};
+
+<span class=keyword>struct</span> State2 :
+  <span class=keyword>public</span> fsm::state&lt; State2, StateList &gt;
+  <span class=keyword>virual public</span> Common
+{
+  <span class=comment>// ...</span>
+};
+
+<span class=keyword>struct</span> State3 :
+  <span class=keyword>public</span> fsm::state&lt; State3, StateList &gt;
+  <span class=keyword>virual public</span> Common
+{
+  <span class=comment>// ...</span>
+};
+
+<span class=comment>// Method implementation is outline because it needs to see states definition</span>
+fsm::state_id_t Common::DetermineNextState(fsm::state_id_t CurrentStateID, <span class=keyword>int</span> Data)
+{
+  fsm::state_id_t next_state = CurrentStateID;
+
+  <span class=keyword>switch</span> (CurrentStateID)
+  {
+  <span class=keyword>case</span> State1::state_id:
+    <span class=keyword>if</span> (Data &gt; m_Data)
+       next_state = State2::state_id;
+    m_Data = Data;
+    <span class=keyword>break</span>;
+
+  <span class=keyword>case</span> State2::state_id:
+     next_state = State3::state_id;
+     m_Data = Data * 2;
+     <span class=keyword>break</span>;
+  }
+
+  <span class=keyword>return</span> next_state;
+}</PRE></blockquote><P>
+The state machine also allows user to get the identifier of its
+current state by calling <CODE>get_current_state_id</CODE>
+method of the machine.</P>
+<H3><A NAME="Enter and leave state handlers">Enter and
+leave state handlers</A></H3>
+<P>The library supports calling additional handlers when a transition
+from one state to another takes place. These handlers will be called
+regardless of the version of <CODE>switch_to</CODE>
+being executed (dynamic or static). By default these handlers are
+empty, so their use is strictly optional.</P>
+<P>During transition, in the state that being left a method named <CODE>on_leave_state</CODE>
+is called first. If it returns normally, the handler named
+<CODE>on_enter_state</CODE> is called
+in the target state. If the latter returns correctly, the transition
+is considered to be completed and the <CODE>switch_to</CODE> method
+returns. If any of these handlers throw an exception, the transition
+does not occur (in other words, the state machine will be left in
+state before the failed <CODE>switch_to</CODE>
+call), and the exception is propagated to the <CODE>switch_to</CODE> caller.</P>
+<P>This behaviour leaves place for some inconveniences with the
+<CODE>on_leave_state</CODE> handler.
+Consider the situation when <CODE>on_leave_state</CODE>
+frees some resources allocated for a state, then <CODE>on_enter_state</CODE>
+fails and throws an exception. The state machine is left in the
+initial state, though it may not expect to find itself with resources
+freed. The library can not call <CODE>on_enter_state</CODE>
+handler in the initial state because it may not be what user wanted
+and it may throw too. The library can not call <CODE>on_enter_state</CODE>
+prior to <CODE>on_leave_state</CODE>
+because this would leave the same problem if the leave handler
+throwed and it would additionally introduce semantic confusion of
+situation when the automaton appears to be in two states simultaneously. So
+the library leaves this problem to user's befalf. The only advice that
+may be given here is to try to avoid to throw exceptions in enter and
+leave state handlers.</P>
+<blockquote><PRE><span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList &gt;
+{
+  <span class=keyword>void</span> on_process(SomeEvent)
+  {
+    <span class=comment>// Here first State1::on_leave_state, then State2::on_enter_state will be called
+    // and after that the control will be returned</span>
+    switch_to&lt; State2 &gt;();
+  }
+
+  <span class=keyword>void</span> on_leave_state()
+  {
+    std::cout &lt;&lt; &quot;State1 is being left&quot; &lt;&lt; std::endl;
+  }
+};
+
+<span class=keyword>struct</span> State2 :
+  <span class=keyword>public</span> fsm::state&lt; State2, StateList &gt;
+{
+  <span class=keyword>void</span> on_enter_state()
+  {
+    std::cout &lt;&lt; &quot;State2 is being entered&quot; &lt;&lt; std::endl;
+  }
+};
+</PRE></blockquote><H3>
+<A NAME="Resetting state machine">Resetting state machine</A></H3>
+<P>The state machine has the ability to be reset to its initial
+state. To do this user have to call <CODE>reset</CODE>
+method of the machine. It is guaranteed that the state machine
+is in the initial state (the one that is first in the states
+type sequence) after this method returns and that it will not throw.</P>
+<P>While being executed <CODE>reset</CODE>
+invokes <CODE>on_reset</CODE> handlers
+in each state (by default these handlers are empty). The order of
+invocation is not specified. The <CODE>on_reset</CODE> methods
+may throw, although exceptions will be suppressed and will not influence the
+invocation of the <CODE>on_reset</CODE>
+handlers in other states.</P>
+<P>The main intent of the <CODE>on_reset</CODE>
+handlers is to bring state data to its initial state. If the state
+machine has some virtual base classes with shared data between states,
+one of the states should perform such cleanup explicitly by its own means.</P>
+<blockquote><PRE><span class=keyword>struct</span> State1;
+<span class=keyword>struct</span> State2;
+
+<span class=keyword>typedef</span> mpl::vector&lt; State1, State2 &gt;::type StateList;
+
+<span class=keyword>struct</span> Common
+{
+  std::string m_SharedData;
+
+  <span class=comment>// This method is to be called when the FSM is being reset</span>
+  <span class=keyword>void</span> cleanup()
+  {
+    m_SharedData.clear();
+  }
+};
+
+<span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList &gt;,
+  <span class=keyword>virtual public</span> Common
+{
+  <span class=keyword>int</span> m_OwnData;
+
+  <span class=keyword>void</span> on_reset()
+  {
+    m_OwnData = 0;
+    <span class=comment>// One state has to initiate cleanup of the virtual base class</span>
+    cleanup();
+  }
+};
+
+<span class=keyword>struct</span> State2 :
+  <span class=keyword>public</span> fsm::state&lt; State2, StateList &gt;,
+  <span class=keyword>virtual public</span> Common
+{
+  std::string m_OwnData;
+
+  <span class=keyword>void</span> on_reset()
+  {
+    m_OwnData.clear();
+  }
+};
+
+
+<span class=keyword>typedef</span> fsm::state_machine&lt; StateList &gt; MyFSM;
+
+MyFSM fsm;
+
+<span class=comment>// This invokes all on_reset methods and leaves fsm in State1</span>
+fsm.reset();
+</PRE></blockquote><H3>
+<A NAME="Returning a value from state machine's process">Returning
+a value from state machine's <CODE>process</CODE></A></H3>
+<P>Up to now we were working with non-returning state
+machines. The library has the ability to return values as a result of
+event processing. To enable this feature user have to supply the
+return type of FSM in the second template parameter of
+<CODE>fsm::state_machine</CODE> class
+template and in the third template parameter of <CODE>fsm::state</CODE>
+class template for each state the state machine consists of. These
+types have to be the same, otherwise the code will not compile.</P>
+<P>Each <CODE>on_process</CODE> handler
+in each state should return a value that is implicitly convertible to
+the return type of the FSM. The FSM's <CODE>process</CODE>
+method will return the results of these handlers to the caller.</P>
+<blockquote><PRE><span class=comment>// State1 definition</span>
+<span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList, <span class=keyword>int</span> &gt;
+{
+  <span class=keyword>int</span> on_process(SomeEvent1)
+  {
+    return 1;
+  }
+  <span class=keyword>int</span> on_process(SomeEvent2)
+  {
+    return 2;
+  }
+};
+
+<span class=comment>// State2 definition</span>
+<span class=keyword>struct</span> State2 :
+  <span class=keyword>public</span> fsm::state&lt; State2, StateList, <span class=keyword>int</span> &gt;
+{
+  <span class=keyword>int</span> on_process(SomeEvent1)
+  {
+    return -1;
+  }
+};
+
+<span class=comment>// State machine definition</span>
+<span class=keyword>typedef</span> fsm::state_machine&lt; StateList, <span class=keyword>int</span> &gt; MyFSM;
+
+MyFSM fsm;
+
+<span class=comment>// The process method now returns the result of on_process handler being called</span>
+<span class=keyword>int</span> result = fsm.process(SomeEvent1());
+</PRE></blockquote><H3>
+<A NAME="Unexpected events handling">Unexpected events handling</A></H3>
+<P>It is obvious that it is possible to create a state machine that
+does not have event handlers for all event types in every state. The
+fact of absence of appropriate handler for some type of event in a
+state does not imply that the automaton is invalid and should not
+compile. This only means that this particular type of event is not
+expected by the machine in this state and most likely it shouldn't
+occur in the first place. From this perspective the occurrence of
+an unexpected event is an exceptional situation which should be
+handled by the library in run time.</P>
+<P>In case if the library can not find appropriate event handler in
+the current state, it initiates unexpected event handling procedure. By
+default this procedure is throwing an <CODE>fsm::unexpected_event</CODE>
+exception. User can override this behaviour by providing a functional
+object or a pointer to function that will be called in such case.
+This can be done by calling <CODE>set_unexpected_event_handler</CODE>
+method of the state machine. The handler should provide <CODE>operator()</CODE>
+with the following signature:</P>
+<blockquote><PRE>return_type (boost::any <span class=keyword>const</span>&amp;, std::type_info <span class=keyword>const</span>&amp;, fsm::state_id_t);</PRE></blockquote>
+<P>Here <CODE>return_type</CODE> is the
+return type of the complete state machine, the first argument will
+contain the copy of the unexpected event, the second and the third
+arguments will contain type information and identifier of the current
+state of the machine, respectively. If this handler does not throw an
+exception, the returned value is returned from the state machine's <CODE>process</CODE>
+method.</P>
+<P>It is possible to restore the default behaviour by calling
+<CODE>set_default_unexpected_event_handler</CODE>
+method of the state machine.</P>
+<H3><A NAME="Specifying transition map">Specifying
+transition map</A></H3>
+<P>Although it is possible to switch between states with the
+<CODE>switch_to</CODE> method right in
+the state event handlers, sometimes it is more convenient to have all
+transitions between states in one place. This place is called a
+transition map and it gives a basic knowledge of how the state
+machine functions from the first glance.</P>
+<P>In the library implementation the trantition map is represented as an MPL
+type sequence containing elements that describe conditions in which
+the automatic transition should take place and target state types to transit to.
+The transition map should be passed in the third template parameter
+of the <CODE>fsm::state_machine</CODE>
+class template. It should be noted that transition map usage does not
+deny the <CODE>switch_to</CODE> method
+usage, so these two means may be combined. But users are
+discouraged from such combination due to distribution of the
+information of transitions between states. This approach may lead to
+errors and may decrease your code quality.</P>
+<P>Each transition in the map is an instance of <CODE>fsm::transition</CODE>
+class template. It has three template parameters: the current state,
+in which the state machine have to persist for the transition to be
+performed; the event type, which triggers the transition; and the
+target state type. The first template parameter can also be an
+<CODE>fsm::any_state</CODE> type, which means
+that the transition should take place regardless of the current
+state.</P>
+<P>When a call to the state machine's <CODE>process</CODE>
+method is discovered, the transition map is looked from begin to end
+to find the <CODE>fsm::transition</CODE>
+element that has current state type or <CODE>fsm::any_state</CODE>
+in the first template parameter and the event type in the second. If
+such element is found, an automatic transition to the target state is
+performed (this transition is completely equivalent to the <CODE>switch_to</CODE>
+method call). The lookup process is made in compile time. This
+behaviour implies that transitions with <CODE>fsm::any_state</CODE>
+as the current state type are better to be placed closer to the end
+of the transition map. Otherwise such transition might override more
+specific one placed after it.</P>
+<P>After the transition completes the event is passed to the target
+state event handler (or to unexpected event handler if there is no appropriate
+handler defined in it). If no transition is found in the transition map,
+then the event is delivered to the current state without any transition.</P>
+<P>One may wonder why the event is delivered to the target state rather
+than the original one. The decision to make the behavior as described was taken
+in order to make the library behaviour more straightforward. Had the automatic
+transition taken place after the event processing, the library would face a tough
+decision on what to do if another transition have been performed during the event
+processing. Furthermore, the event processing may lead to an exception, as may the
+transition, which leads us to the situation when the transition is not even
+attempted if the event processing fails.</P>
+<P>Let's see the example of simple network server-side dialog management
+state machine:</P>
+<blockquote><PRE><span class=comment>// An event that opens incoming dialog</span>
+<span class=keyword>struct</span> OpenDialogEvent {};
+<span class=comment>// An event that contains a request from the remote side</span>
+<span class=keyword>struct</span> RequestEvent {};
+<span class=comment>// An event that closes the dialog</span>
+<span class=keyword>struct</span> CloseDialogEvent {};
+
+<span class=comment>// Let's define states list</span>
+<span class=keyword>struct</span> Idle;
+<span class=keyword>struct</span> Establishing;
+<span class=keyword>struct</span> RequestProcessing;
+<span class=keyword>struct</span> Closing;
+
+<span class=keyword>typedef</span> mpl::vector&lt; Idle, Establishing, RequestProcessing, Closing &gt;::type StateList;
+
+<span class=comment>// Idle state definition</span>
+<span class=keyword>struct</span> Idle :
+  <span class=keyword>public</span> fsm::state&lt; Idle, StateList &gt;
+{
+  <span class=comment>// It doesn't need any event handlers since OpenDialogEvent will automatically
+  // switch to Establishing state and no other events are expected at this state</span>
+};
+
+<span class=comment>// Establishing state definition</span>
+<span class=keyword>struct</span> Establishing :
+  <span class=keyword>public</span> fsm::state&lt; Establishing, StateList &gt;
+{
+  <span class=comment>// Here we process dialog creation request from the remote side</span>
+  <span class=keyword>void</span> on_process(OpenDialogEvent <span class=keyword>const</span>&amp;);
+};
+
+<span class=comment>// RequestProcessing state definition</span>
+<span class=keyword>struct</span> RequestProcessing :
+  <span class=keyword>public</span> fsm::state&lt; RequestProcessing, StateList &gt;
+{
+  <span class=comment>// Here we process a request from the remote side</span>
+  <span class=keyword>void</span> on_process(RequestEvent <span class=keyword>const</span>&amp;);
+};
+
+<span class=comment>// Closing state definition</span>
+<span class=keyword>struct</span> Closing :
+  <span class=keyword>public</span> fsm::state&lt; Closing, StateList &gt;
+{
+  <span class=comment>// Here we process a dialog closure request from the remote side
+  // In the end this method should explicitly switch back to Idle state</span>
+  <span class=keyword>void</span> on_process(CloseDialogEvent <span class=keyword>const</span>&amp;);
+};
+
+<span class=comment>// Definition of the transition map</span>
+<span class=keyword>typedef</span> mpl::vector&lt;
+  <span class=comment>// If being in Idle state OpenDialogEvent is received, switch to state Establishing</span>
+  fsm::transition&lt; Idle, OpenDialogEvent, Establishing &gt;,
+  fsm::transition&lt; Establishing, RequestEvent, RequestProcessing &gt;,
+  fsm::transition&lt; RequestProcessing, CloseDialogEvent, Closing &gt;
+&gt;::type TransitionList;
+
+<span class=comment>// Defining the type of the state machine
+// Here we have to explicitly supply the return type of the state machine - void.</span>
+<span class=keyword>typedef</span> fsm::state_machine&lt; StateList, <span class=keyword>void</span>, TransitionList &gt; DialogFSM;
+
+<span class=comment>// After construction the dlg is in Idle state</span>
+DialogFSM dlg;
+
+<span class=comment>// Here dlg switches to Establishing state and processes the event</span>
+dlg.process(OpenDialogEvent());
+
+<span class=comment>// Here dlg switches to RequestProcessing state and processes the event</span>
+dlg.process(RequestEvent());
+
+<span class=comment>// Since no automatic transition defined for state RequestProcessing
+// and event RequestEvent, the dlg stays in RequestProcessing state</span>
+dlg.process(RequestEvent());
+dlg.process(RequestEvent());
+
+<span class=comment>// Here dlg switches to Closing state and processes the event
+// and then explicitly switches to Idle state. This additional
+// Closing hidden state was introduced intentionally to avoid
+// CloseDialogEvent receipt in Idle state.</span>
+dlg.process(CloseDialogEvent());
+</PRE></blockquote>
+<P>
+Since the transition map may become lengthy, the library allows to split it into state-specific and common
+parts. Users may provide an additional <code>transitions_type_list</code> typedef inside each state.
+This type should contain transitions MPL type sequence, just like <code>TransitionList</code>
+in the example above, but these transitions should be from the state in which the sequence is declared.
+When the transition lookup is performed this type sequence is searched prior to the sequence provided
+in the third template parameter of the <code>state_machine</code> class template. This allows
+to put all state-specific transitions into states and leave transitions from any state in the common
+transition map. This also allows to increase compilation speed significantly.
+</P>
+<blockquote><PRE>
+<span class=comment>// State1 definition</span>
+<span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList &gt;
+{
+  <span class=comment>// Transitions from State1 to other states</span>
+  <span class=keyword>typedef</span> mpl::vector&lt;
+    fsm::transition&lt; State1, Event1, State2 &gt;,
+    fsm::transition&lt; State1, Event2, State3 &gt;
+  &gt;::type transitions_type_list;
+
+  <span class=comment>// ...</span>
+};
+
+<span class=comment>// State2 definition</span>
+<span class=keyword>struct</span> State2 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList &gt;
+{
+  <span class=comment>// Transitions from State2 to other states</span>
+  <span class=keyword>typedef</span> mpl::vector&lt;
+    fsm::transition&lt; State2, GoBackEvent, State1 &gt;,
+    fsm::transition&lt; State2, FinishEvent, FinalState &gt;
+  &gt;::type transitions_type_list;
+
+  <span class=comment>// ...</span>
+};
+
+<span class=comment>// ...</span>
+
+<span class=comment>// Definition of the common transition map
+// This part of the map is searched after any state-specific parts</span>
+<span class=keyword>typedef</span> mpl::vector&lt;
+  <span class=comment>// If being in any state StraightToEndEvent is received, switch to state FinalState</span>
+  fsm::transition&lt; fsm::any_state, StraightToEndEvent, FinalState &gt;
+&gt;::type TransitionList;
+
+<span class=comment>// Defining and using the state machine just like in the previous example</span>
+<span class=keyword>typedef</span> fsm::state_machine&lt; StateList, <span class=keyword>void</span>, TransitionList &gt; DialogFSM;
+
+<span class=comment>// ...</span>
+</PRE></blockquote>
+
+<H3><A NAME="Customizing transition rules in transition maps">
+Customizing transition rules in transition maps</A></H3>
+<P>The library supports customizing the transition rules.
+Each element in the transition map should
+conform the <a href="reference.html#Transitions">Transitions concept</a>
+requirements and contain two members:</P>
+<OL>
+	<LI><P>A class template predicate <CODE>is_applicable</CODE> to detect transition suitability
+	for a given state/event types pair:</P>
+<blockquote><PRE><span class=keyword>template</span>&lt; <span class=keyword>typename</span> StateT, <span class=keyword>typename</span> EventT &gt;
+<span class=keyword>struct</span> is_applicable;</PRE></blockquote>
+	<LI><P>A static function <CODE>transit</CODE> to actually perform the transition.</P>
+</OL>
+<P>The library provides a base class template <CODE>fsm::basic_transition</CODE>
+for user-defined transition rules. It is instantiated with the target
+state type and defines the <CODE>transit</CODE> function that merely calls
+<code>switch_to</code> method in the current state to perform the transition to
+the target state. Here are a few examples of defining custom transition rules.</P>
+<blockquote><PRE><span class=comment>// Let's define the fsm::transition's analogue that triggers
+// not only when the event type is equal to the specified,
+// but even when it is derived from it.</span>
+<span class=keyword>template</span>&lt; <span class=keyword>typename</span> CurrentStateT, <span class=keyword>typename</span> EventT, <span class=keyword>typename</span> TargetStateT &gt;
+<span class=keyword>struct</span> same_or_derived_event_transition :
+  <span class=keyword>public</span> fsm::basic_transition&lt; TargetStateT &gt;
+{
+  <span class=comment>// We only need to specify the static predicate that selects the transition</span>
+  <span class=keyword>template</span>&lt; <span class=keyword>typename</span> StateT, <span class=keyword>typename</span> EvtT &gt;
+  <span class=keyword>struct</span> is_applicable :
+    <span class=keyword>public</span> mpl::and_&lt;
+      <span class=comment>// We should check that state type is correct</span>
+      mpl::or_&lt;
+        is_same&lt; CurrentStateT, fsm::any_state &gt;,
+        is_same&lt; CurrentStateT, StateT &gt;
+      &gt;,
+      <span class=comment>// Now we shall check the event type</span>
+      mpl::or_&lt;
+        is_same&lt; EventT, EvtT &gt;,
+        is_base_and_derived&lt; EventT, EvtT &gt;
+      &gt;
+    &gt;
+  {
+  };
+};
+
+<span class=comment>// Let's define a transition that switches to some state
+// depending on the value and type of the event</span>
+<span class=keyword>template</span>&lt; <span class=keyword>typename</span> CurrentStateT &gt;
+<span class=keyword>struct</span> dispatching_transition
+{
+  <span class=comment>// A static predicate that triggers the transition</span>
+  <span class=keyword>template</span>&lt; <span class=keyword>typename</span> StateT, <span class=keyword>typename</span> EvtT &gt;
+  <span class=keyword>struct</span> is_applicable :
+    <span class=keyword>public</span> is_same&lt; CurrentStateT, StateT &gt;
+  {
+  };
+
+  <span class=comment>// A number of transition rules that depend on event type and value</span>
+  <span class=keyword>static void</span> transit(CurrentStateT&amp; state, <span class=keyword>int</span> evt)
+  {
+    <span class=keyword>switch</span> (evt)
+    {
+      <span class=keyword>case</span> 0:
+        state.<span class=keyword>template</span> switch_to&lt; State1 &gt;();
+        <span class=keyword>break</span>;
+      <span class=keyword>case</span> 1:
+        state.<span class=keyword>template</span> switch_to&lt; State2 &gt;();
+        <span class=keyword>break</span>;
+      <span class=keyword>default</span>:
+        <span class=comment>// In this case the event won't be delivered to a state,
+        // the exception will be propagated to the FSM caller</span>
+        <span class=keyword>throw</span> InvaidEventValue();
+    }
+  }
+
+  <span class=keyword>static void</span> transit(CurrentStateT&amp; state, MyEvent <span class=keyword>const</span>&amp; evt)
+  {
+    state.<span class=keyword>template</span> switch_to&lt; MyEventArrivedState &gt;();
+  }
+
+  <span class=comment>// These rules may also be templates</span>
+  <span class=keyword>template</span>&lt; <span class=keyword>typename</span> EvtT &gt;
+  <span class=keyword>static void</span> transit(CurrentStateT&amp; state, EvtT <span class=keyword>const</span>&amp; evt)
+  {
+    <span class=comment>// A transition may return without switching to another state</span>
+  }
+};
+</PRE></blockquote><H3>
+<A NAME="Specifying state names"></A>Specifying state names</H3>
+<P>Each state of a complete state machine has its string name. It may
+be obtained by calling static member function <CODE>get_state_name</CODE>
+that is defined in each state. The signature of this function is as follows:</P>
+<blockquote><PRE><span class=keyword>static</span> std::string <span class=keyword>const</span>&amp; get_state_name();</PRE></blockquote><P>
+By default the implementation of the <CODE>fsm::state</CODE>
+class template constructs the state name from the state's type
+information (with some enhancements when appropriate). There is no
+guarantee that this default name will be the same across compilers
+and platforms and intended to be used only for informative purposes.
+Users may override this method in the state class to provide a more
+telling and user-friendly state name.</P>
+<P>Each state name may also be obtained by calling <CODE>get_state_name</CODE>
+method of the state machine with the state identifier passed as an
+argument. If the state identifier is invalid, the method will throw the
+<CODE>fsm::bad_state_id</CODE>
+exception. Calling the <CODE>get_current_state_name</CODE>
+method of the state machine results in the current
+state name.</P>
+<blockquote><PRE><span class=comment>// WaitingForDatabase state definition</span>
+<span class=keyword>struct</span> WaitingForDatabase :
+  <span class=keyword>public</span> fsm::state&lt; WaitingForDatabase, StateList &gt;
+{
+  <span class=keyword>static</span> std::string <span class=keyword>const</span>&amp; get_state_name()
+  {
+    <span class=keyword>static const</span> std::string name = &quot;Waiting for database response&quot;;
+    <span class=keyword>return</span> name;
+  }
+};
+
+<span class=keyword>typedef</span> fsm::state_machine&lt; StateList &gt; MyFSM;
+
+MyFSM fsm;
+
+<span class=comment>// Outputs &quot;Waiting for database response&quot;</span>
+std::cout &lt;&lt; WaitingForDatabase::get_state_name() &lt;&lt; std::endl;
+<span class=comment>// Outputs the same &quot;Waiting for database response&quot;</span>
+std::cout &lt;&lt; fsm.get_state_name(WaitingForDatabase::state_id) &lt;&lt; std::endl;
+<span class=comment>// Outputs the current state name</span>
+std::cout &lt;&lt; fsm.get_current_state_name() &lt;&lt; std::endl;
+</PRE></blockquote><H3>
+<A NAME="Accessing the states, state type information and checking if the machine is in a specified state">
+Accessing the states, state type information and checking if the
+machine is in a specified state</A></H3>
+<P>Generally the state machine is intended to encapsulate its logic
+from the environment. But there are cases when the machine gets
+tightly coupled with the environment that calls it. Usually this
+happen when a user develops an object that acts like a state machine
+but has to support an interface not really convenient for that. In
+that case the tiny layer between the interface and the state machine
+are acting together, often knowing about each other more than they
+normally should. Another case of such need is creating unit tests for
+state machines without having to add self-testing code to the state
+machine itself. In other cases users are discouraged from using features
+described in this section.</P>
+<P>The state machine allows to acquire a reference to any of its
+states or public bases thereof via template method <CODE>get</CODE>.
+The template should be instantiated with the state type or its public
+base class. The method returns constant reference if called on
+constant object.</P>
+<P>The state machine allows to acquire type information of any state
+by calling method <CODE>get_state_type</CODE>
+with state identifier passed as an argument. If the state identifier
+is not valid, the <CODE>fsm::bad_state_id</CODE>
+exception is thrown. Calling <code>get_currente_state_type</code> returns type
+information of the current state.</P>
+<P>The state machine allows to check if it is in a specific state by
+calling template method <CODE>is_in_state</CODE>.
+The method should be instantiated with a state type and returns <CODE>true</CODE>
+if the state machine is currently in this state or <CODE>false</CODE> otherwise.</P>
+<H3><A NAME="Simplified event construction">Simplified event construction</A></H3>
+<P>The library offers a simplified way of generating events to pass
+to state machines based on the Boost.Tuples library. The feature is
+implemented with a class template <CODE>fsm::event</CODE>.
+This template may have variable number of template parameters
+(<CODE>BOOST_FSM_MAX_EVENT_ARGS</CODE> macro plus 1) but no less than one. The
+first template parameter is used only as a tag to differentiate
+events having the same set of argument types. The rest of the template parameters
+describe event parameters.</P>
+<P>Internally the <CODE>fsm::event</CODE>
+object stores a <CODE>tuple</CODE> that
+holds all the parameters of the event (it can be obtained via the
+<CODE>get_tuple</CODE> method). Therefore, all functionality offered by
+Boost.Tuples is implicitly offered by the <CODE>fsm::event</CODE>
+class, including the support of passing references in tuples. To ease
+the creation of event objects there is a free helper function
+<CODE>fsm::make_event</CODE>. The tag
+type should be explicitly noted in the function call. See the
+modification of the above example of the dialog management FSM.</P>
+<blockquote><PRE><span class=comment>// Declaration of event tags. They don't even have to be defined.</span>
+<span class=keyword>struct</span> OpenDialog;
+<span class=keyword>struct</span> Request;
+<span class=keyword>struct</span> CloseDialog;
+
+<span class=comment>// Let's define states list</span>
+<span class=keyword>struct</span> Idle;
+<span class=keyword>struct</span> Establishing;
+<span class=keyword>struct</span> RequestProcessing;
+<span class=keyword>struct</span> Closing;
+
+<span class=keyword>typedef</span> mpl::vector&lt; Idle, Establishing, RequestProcessing, Closing &gt;::type StateList;
+
+<span class=comment>// Idle state definition</span>
+<span class=keyword>struct</span> Idle :
+  <span class=keyword>public</span> fsm::state&lt; Idle, StateList &gt;
+{
+};
+
+<span class=keyword>struct</span> Establishing :
+  <span class=keyword>public</span> fsm::state&lt; Establishing, StateList &gt;
+{
+  <span class=comment>// The handler processes dialog open request with IP address of the remote side</span>
+  <span class=keyword>void</span> on_process(fsm::event&lt; OpenDialog, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span> &gt; <span class=keyword>const</span>&amp; evt)
+  {
+    std::cout &lt;&lt; &quot;The dialog opening request arrived from &quot;
+      &lt;&lt; evt.get&lt; 0 &gt;() &lt;&lt; '.' &lt;&lt; evt.get&lt; 1 &gt;() &lt;&lt; '.' &lt;&lt; evt.get&lt; 2 &gt;() &lt;&lt; '.'
+      &lt;&lt; evt.get&lt; 3 &gt;() &lt;&lt; ':' &lt;&lt; evt.get&lt; 4 &gt;() &lt;&lt; '.' &lt;&lt; std::endl;
+  }
+};
+
+<span class=keyword>struct</span> RequestProcessing :
+  <span class=keyword>public</span> fsm::state&lt; RequestProcessing, StateList &gt;
+{
+  <span class=comment>// The handler processes request with some data from the remote side passed by reference</span>
+  <span class=keyword>void</span> on_process(fsm::event&lt; Request, std::string <span class=keyword>const</span>&amp; &gt; <span class=keyword>const</span>&amp; evt);
+};
+
+<span class=keyword>struct</span> Closing :
+  <span class=keyword>public</span> fsm::state&lt; Closing, StateList &gt;
+{
+  <span class=comment>// The handler processes dialog closure request from the remote side with no parameters</span>
+  <span class=keyword>void</span> on_process(fsm::event&lt; CloseDialog &gt; <span class=keyword>const</span>&amp; evt);
+};
+
+<span class=comment>// Definition of the transitions map</span>
+<span class=keyword>typedef</span> mpl::vector&lt;
+  fsm::transition&lt; Idle, fsm::event&lt; OpenDialog, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span> &gt;, Establishing &gt;,
+  fsm::transition&lt; Establishing, fsm::event&lt; Request, std::string <span class=keyword>const</span>&amp; &gt;, RequestProcessing &gt;,
+  fsm::transition&lt; RequestProcessing, fsm::event&lt; CloseDialog &gt;, Closing &gt;
+&gt;::type TransitionList;
+
+<span class=keyword>typedef</span> fsm::state_machine&lt; StateList, <span class=keyword>void</span>, TransitionList &gt; DialogFSM;
+
+DialogFSM dlg;
+
+<span class=comment>// Here we pass an OpenDialog event with five parameters representing IP address of the remote side</span>
+dlg.process(fsm::make_event&lt; OpenDialog &gt;(192, 168, 0, 100, 32001));
+<span class=comment>// Here we use Boost.Ref to pass parameters by reference</span>
+dlg.process(fsm::make_event&lt; Request &gt;(cref(std::string(&quot;Print 'hello' to the console&quot;))));
+dlg.process(fsm::make_event&lt; Request &gt;(cref(std::string(&quot;Logout&quot;))));
+<span class=comment>// Events may also have no parameters</span>
+dlg.process(fsm::make_event&lt; Close &gt;());
+</PRE></blockquote>
+<P>There is also support for integral constant-tagged events in the library. Integral-tagged events are implemented with
+<code>event_c</code> class template, their usage is similar to the <code>event</code> class template described above.</P>
+<blockquote><PRE><span class=comment>// Declaration of event tags.</span>
+<span class=keyword>enum</span> enumEvensTags
+{
+  evtOpenDialog,
+  evtRequest,
+  evtCloseDialog
+};
+
+<span class=comment>// ...</span>
+
+<span class=keyword>struct</span> Establishing :
+  <span class=keyword>public</span> fsm::state&lt; Establishing, StateList &gt;
+{
+  <span class=comment>// The handler processes dialog open request with IP address of the remote side</span>
+  <span class=keyword>void</span> on_process(fsm::event_c&lt; evtOpenDialog, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span> &gt; <span class=keyword>const</span>&amp; evt)
+  {
+    std::cout &lt;&lt; &quot;The dialog opening request arrived from &quot;
+      &lt;&lt; evt.get&lt; 0 &gt;() &lt;&lt; '.' &lt;&lt; evt.get&lt; 1 &gt;() &lt;&lt; '.' &lt;&lt; evt.get&lt; 2 &gt;() &lt;&lt; '.'
+      &lt;&lt; evt.get&lt; 3 &gt;() &lt;&lt; ':' &lt;&lt; evt.get&lt; 4 &gt;() &lt;&lt; '.' &lt;&lt; std::endl;
+  }
+};
+
+<span class=comment>// ...</span>
+
+<span class=comment>// Here we pass an OpenDialog event with five parameters representing IP address of the remote side</span>
+dlg.process(fsm::make_event&lt; evtOpenDialog &gt;(192, 168, 0, 100, 32001));
+
+<span class=comment>// ...</span>
+</PRE></blockquote>
+<P>But users should be careful about the tag constants declared in such way. If there are more than one
+tags that have equal values but designate different events, there will be no way to distinguish these
+events in a state handler. For example:</P>
+<blockquote><PRE><span class=keyword>namespace</span> Database {
+	
+<span class=comment>// Events related to database interaction</span>
+<span class=keyword>enum</span> enumEvensTags
+{
+  evtConnectionLost,
+  evtResponseReceived
+};
+
+} <span class=comment>// namespace Database</span>
+
+<span class=keyword>namespace</span> Dialog {
+	
+<span class=comment>// Events related to dialogs support</span>
+<span class=keyword>enum</span> enumEvensTags
+{
+  evtOpenDialog,
+  evtRequest,
+  evtCloseDialog
+};
+
+} <span class=comment>// namespace Dialog</span>
+
+<span class=comment>// ...</span>
+
+<span class=keyword>struct</span> Establishing :
+  <span class=keyword>public</span> fsm::state&lt; Establishing, StateList &gt;
+{
+  <span class=comment>// This handler will be considered suitable for both Dialog::evtOpenDialog
+  // and Database::evtConnectionLost events if thay have similar parameter types</span>
+  <span class=keyword>void</span> on_process(fsm::event_c&lt; Dialog::evtOpenDialog, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span>, <span class=keyword>int</span> &gt; <span class=keyword>const</span>&amp; evt)
+  {
+    std::cout &lt;&lt; &quot;The dialog opening request arrived from &quot;
+      &lt;&lt; evt.get&lt; 0 &gt;() &lt;&lt; '.' &lt;&lt; evt.get&lt; 1 &gt;() &lt;&lt; '.' &lt;&lt; evt.get&lt; 2 &gt;() &lt;&lt; '.'
+      &lt;&lt; evt.get&lt; 3 &gt;() &lt;&lt; ':' &lt;&lt; evt.get&lt; 4 &gt;() &lt;&lt; '.' &lt;&lt; std::endl;
+  }
+};
+
+<span class=comment>// ...</span>
+
+<span class=comment>// Here we pass an OpenDialog event with five parameters representing IP address of the remote side</span>
+dlg.process(fsm::make_event&lt; Dialog::evtOpenDialog &gt;(192, 168, 0, 100, 32001));
+
+<span class=comment>// Here we detected that database is no longer accessible
+// But the event has the same type as evtOpenDialog above and gets delivered to the wrong handler</span>
+dlg.process(fsm::make_event&lt; Database::evtConnectionLost &gt;(192, 168, 0, 101, 32001));
+
+<span class=comment>// ...</span>
+</PRE></blockquote>
+<P>In cases like this it is better to use typed events: either tagged with <code>mpl::integral_c</code> wrapper or
+with your own tag types as shown in the <code>event</code> class template example.</P>
+<H3><A NAME="Compile-time state machine consistency check">Compile-time state machine consistency check</A></H3>
+<P>There are cases when a user wants to be sure that his automaton handles every event type that may be passed
+to the state machine. This may be particularly useful on the development stage when it may be easy to forget
+about some particular event or misprint its type in the handler declaration.
+The library provides macro <code>BOOST_FSM_MUST_HANDLE_ALL_EVENTS</code> that should be placed inside
+every state of the machine that have to provide handlers for any event being passed to the machine. It will
+generate a compile-time error if some event is left unexpected in this state. For example:</P>
+<blockquote><PRE><span class=keyword>struct</span> State1 :
+  <span class=keyword>public</span> fsm::state&lt; State1, StateList &gt;
+{
+  <span class=comment>// The compile-time error will point to this line</span>
+  BOOST_FSM_MUST_HANDLE_ALL_EVENTS();
+
+  <span class=keyword>void</span> on_process(<span class=keyword>int</span>);
+};
+
+<span class=comment>// ...</span>
+
+<span class=comment>// Ok, there is on_process for int in State1. Compiles silently.</span>
+fsm.process(10);
+
+<span class=comment>// This line will cause compile-time error because there's
+// no on_process handler for MyEvent in State1.
+// Since there is no way to determine at compile-time weither it is possible to be
+// in state State1 while MyEvent occurs, BOOST_FSM_MUST_HANDLE_ALL_EVENTS will trigger a
+// compile-time error even if it is impossible in run-time to receive MyEvent in State1.</span>
+fsm.process(MyEvent());
+</PRE></blockquote>
+</P>
+<P><BR>
+</P>
+<H2><A NAME="Multithreading support">Multithreading support</A></H2>
+<P>The <code>state_machine</code> class template does not provide any
+thread synchronization support. This is done to achieve maximum
+performance in single-thread applications. However, it is safe to create
+and use different instances of the same state machine in different threads.</P>
+<P>The library provides a <code>locking_state_machine</code> class
+template that may be used instead of <code>state_machine</code> and
+provides the same interface but adds a synchronization layer between
+the environment an the machine internals (please, refer to the class reference
+to see thread safety guarantees for different methods).<br>
+Additionally, <code>locking_state_machine</code> provides a <code>get_mutex</code>
+method that returns a reference to the mutex that is used to lock the machine, and
+<code>mutex_type</code> and <code>scoped_lock</code> typedefs to
+allow user to lock the machine externally.</P>
+<blockquote><PRE><span class=keyword>typedef</span> fsm::locking_state_machine&lt; StateList &gt; FSM_t;
+FSM_t fsm;
+
+<span class=comment>// Thread-safe</span>
+fsm.process(Event1());
+
+<span class=keyword>typedef</span> FSM_t::scoped_lock scoped_lock;
+scoped_lock lock(fsm.get_mutex());
+
+<span class=comment>// The machine is locked, we may safely access its data members</span>
+fsm.get&lt; State1 &gt;().m_Data = 10;
+</PRE></blockquote>
+<P><BR>
+</P>
+<H2><A NAME="Performance">Performance</A></H2>
+<P>The performance aspect has been paid a special attention while
+developing the library. The following notes regarding the current run-time performance
+can be given:
+<ul>
+	<li>The runtime performance of the event delivery to the appropriate handler
+	in the state is comparable to a function call via the function pointer
+	and does not depend on either number of states or the number of transitions
+	in the transitions map.</li>
+	<li>The transition via <code>switch_to</code> cost (excluding the cost of enter
+	and leave state handlers) is comparable to integer store into memory
+	(in the static variant) or to a virtual function call (in the dynamic variant).
+	If an automatic transition takes place (a transition rule in the transition map
+	is triggered), an extra function call via the function pointer is added to the
+	event delivery sequence. This is done even if no actual transition is performed
+	in run time, the transition rule compile time applicability is sufficient for
+	the library to make this additional dispatch. In any way the transition cost
+	does not depend on either number of states or the number of transitions in the
+	transitions map.</li>
+	<li>The cost of state machine construction and destruction also do not
+	depend on either number of states or the number of transitions (of course,
+	not counting the cost of construction and destruction states themselves
+	and their base classes that are not the part of the library).</li>
+</ul>
+However, you should bear in mind that these are not guarantees but merely a statement of
+the current implementation feature. It may change in future releases.
+</P>
+<P>There is an example (<code>libs/fsm/example/BitMachine</code>) that may be
+used to confirm these statements and to compare the library to other implementations.
+The example is rather similar to the same-named example in the Boost.Statechart library.
+It implements an automaton that represents a number of bits which may be toggled
+with events. Each state of the machine reflects a distinct set of these bits' values, and
+each event switches the machine to the state that corresponds to the new set of bits.
+For example, if we have 3 bits, we should have 3 events to change each
+of them. And we also should have 2 ^ 3 = 8 states to represent all possible
+combinations of these bits and 3 * 8 = 24 transitions between them. As you may see,
+even for small numbers of bits the machine is rather scaled. Fortunately,
+all these events, states and especially transitions need not to be written by hand and
+may be generated during the compilation.</P>
+<P>In the table bellow there are results of three test runs: for 2, 4 and 6 bits
+state machines (BitMachine example for Boost.FSM and slightly modified Performance example for
+Boost.Statechart) processing 100 millions events each. Each event leads to the state transition via
+the transition map, all event handlers are empty. The rightmost column represents the performance
+of the 6-bit state machine with no transition map, all transitions are made with
+<code>switch_to</code> from event handlers. The figures are single event processing time in nanoseconds
+(10e-9 seconds) and millions events prosessed by FSM per second in brackets.
+The test was run on Intel Pentium 4 3.0 GHz under Windows XP.</P>
+<table border="1" cellpadding="2">
+	<tr>
+	    <td>Implementation</td><td>2 bits</td><td>4 bits</td><td>6 bits</td><td>6 bits, no transition map</td>
+	</tr>
+	<tr>
+	    <td>Boost.FSM (MSVC 8)</td><td>26.59 ns (37.6 Me/s)</td><td>26.78 ns (37.3 Me/s)</td><td>26.81 ns (37.3 Me/s)</td><td>23.33 ns (42.9 Me/s)</td>
+	</tr>
+	<tr>
+	    <td>Boost.FSM (GCC 4.1.1)</td><td>22.91 ns (43.7 Me/s)</td><td>25.40 ns (39.4 Me/s)</td><td>27.62 ns (36.4 Me/s)</td><td>22.63 ns (44.2 Me/s)</td>
+	</tr>
+	<tr>
+	    <td>Boost.FSM (ICL 9.1)</td><td>20.16 ns (49.6 Me/s)</td><td>20.00 ns (50.0 Me/s)</td><td>21.75 ns (46.0 Me/s)</td><td>22.40 ns (44.6 Me/s)</td>
+	</tr>
+	<tr>
+	    <td>Boost.Statechart (MSVC 8)</td><td>600.62 ns (1.7 Me/s)</td><td>679.85 ns (1.5 Me/s)</td><td>774.84 ns (1.3 Me/s)</td><td>-</td>
+	</tr>
+	<tr>
+	    <td>Boost.Statechart (MSVC 8, custom alloc)</td><td>206.72 ns (4.8 Me/s)</td><td>250.00 ns (4.0 Me/s)</td><td>260.31 ns (3.8 Me/s)</td><td>-</td>
+	</tr>
+</table>
+<P>The compilation performance may vary from one compiler to another
+and it, unfortunately, depends on the complexity of the state
+machine and the number of event types it processes. For example, the 6-bit state
+machine described above (6 events, 64 states, 384 transitions) compiles for 1-2 minutes
+with Visual Studio 2005 on Pentium 4 3.0 GHz, and the compiler takes about 800 Mb RAM
+during the process. Other compilers may behave differently and even fail to compile
+such large-scaled state machines. You may try to compile library tests and examples on your
+platform to estimate the performance of compilation.</P>
+<P>But this is far not a common use case of the library since all states are implemented
+in a single translation unit and all events are being passed from one unit,
+which forces the compiler to emit the whole FSM code at once. Separating states
+implementation and event delivery into several translation units may shorten build times.
+FSM decomposition may also be advised for large and complex machines.
+As an additional hint to speed up the build you may try to split transition maps
+into state-specific and common parts or even avoid using transition maps.
+And if you need to make even larger state machines without decomposing, you may want
+to try Boost.Statechart to implement it.</P>
+<P><BR>
+</P>
+<H2><A NAME="Dependency">Dependency</A></H2>
+<P>The Boost.FSM library makes use of several Boost libraries
+including Boost.Any, Boost.Preprocessor, Boost.Function, Boost.MPL,
+Boost.TypeTraits, Boost.Tuples, Boost.Optional and Boost.Ref. Of course, a compliant
+version of STL library is required. As an extended support for GCC
+compiler the library also makes use of some non-standard ABI headers
+that ships with the compiler.</P>
+<P><BR>
+</P>
+<H2><A NAME="Portability">Portability</A></H2>
+<P>The Boost.FSM library should compile and work on any
+standard-compliant C++ compiler. The implementation makes heavy use
+of templates, including partial template specialization, using
+declarations (in-class and out-of-class), template friends
+declarations and relies on function overload resolution mechanism.</P>
+<P>The following compilers were tested successfully with the library
+and showed no problems:</P>
+<UL>
+	<LI><P>Microsoft Visual C++ 7.1 (.NET 2003), 8.0 (.NET 2005) and 8.0 + SP1</P>
+	<LI><P>Intel C++ Compiler 9.1 for Windows (package ID:
+	W_CC_C_9.1.032) and 8.1 for Linux (tested on FreeBSD)</P>
+	<LI><P>GCC versions 3.4.4, 3.4.6, 4.1.0, 4.1.1 on Linux, FreeBSD, MinGW and Cygwin</P>
+</UL>
+<P>The following compilers are known to have problems or most likely
+will have ones:</P>
+<UL>
+	<LI><P>Microsoft Visual C++ 6.0 and 7.0. Most probably will fail to
+	compile due to lack of partial template specialization support.</P>
+	<LI><P>Borland C++ Builder 5.5.1 (free version). Fails to compile
+	due to lack of partial template specialization and in-class using
+	declarations support. Some other minor problems also have been
+	noticed. Newer versions of the compiler have not been tested.</P>
+	<LI><P>OpenWatcom 1.5. Fails to compile due to problems with
+	Boost.MPL code. Newer versions of the compiler have not been tested.</P>
+	<LI><P>SunPro C++ Compiler 5.5 for Solaris (SPARC). Most likely will
+	show problems with function overload resolution. Newer versions of
+	the compiler have not been tested.</P>
+</UL>
+<P><BR><BR>
+</P>
+
+<HR>
+
+<p class="copyright">Copyright &copy; 2006 Semashev Andrey<br></p>
+<p><font size="2">Distributed under the Boost Software License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt) </font> </p>
+
+</BODY>
+</HTML>
