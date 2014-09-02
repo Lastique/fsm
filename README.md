@@ -1,5 +1,5 @@
-Finite State Machines library (ex-Boost.FSM).
-=============================================
+Finite State Machines (ex-Boost.FSM)
+====================================
 
 This library helps implementing finite state machines similar to those described in Boost.MPL book.
 
